@@ -17,39 +17,32 @@ class FClient extends FSocket {
   CommonDatabase get db => dbf.db;
 
   FClient({required super.name}) {
-    connect();
+    //connect();
   }
 
   StreamSubscription? _channelSub;
   StreamSubscription? _streamSub;
 
-  connect() {
+  connect() async {
     final uri = Uri.parse(join(
       FileF.wsUrl,
       'socket',
       name,
     ));
-    print('Connect: $uri');
+
+    //print('Connect: $uri');
 
     try {
       _channelSub?.cancel();
-      //_streamSub?.cancel();
+      _streamSub?.cancel();
 
-      _channel = WebSocketChannel.connect(uri)
-        ..ready.then(
-          (_) {
-            // set connected
-            connected();
-            print('Connected to: $name');
-            synch();
-          },
-          onError: (e) {
-            disconnected();
-            print('couldnt connect to $name');
-          },
-        );
-
+      _channel = WebSocketChannel.connect(uri);
       _channelSub = _channel?.stream.listen(receive);
+      await _channel!.ready;
+      connected();
+      print('Connected with: $name');
+      synch();
+
       /*
       _streamSub = elements.stream.listen((m) {
         final request = jsonEncode(m);
@@ -58,7 +51,8 @@ class FClient extends FSocket {
       */
 
       if (_channel != null) map[name] = _channel!;
-    } catch (_) {
+    } catch (err) {
+      print(err);
       disconnected();
     }
 
@@ -78,11 +72,13 @@ class FClient extends FSocket {
     synched();
   }
 
+  /*
   @override
   receive(d) async {
     print(d);
     super.receive(d);
   }
+  */
 
   static final map = <String, WebSocketChannel>{};
 

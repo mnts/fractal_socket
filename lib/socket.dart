@@ -53,9 +53,11 @@ class FSocket with FSocketMix {
 
   check(EventFractal event) {
     if (!active.isTrue) return false;
-    final m = event.toMap();
-    m.remove('id');
-    sink([m]);
+    event.ownerC.future.then((_) {
+      final m = event.toMap();
+      m.remove('id');
+      sink([m]);
+    });
     return true;
   }
 
@@ -109,13 +111,11 @@ mixin FSocketMix {
       };
     } else if (m case {'since': int time}) {
       final list = <EventFractal>[];
-      for (final ctrl in ctrls) {
-        ctrl
-            .find(m)
-            .where((f) => f.createdAt > time)
-            .where(filter)
-            .forEach(list.add);
-      }
+      EventFractal.map.list
+          .where((f) => f.createdAt > time)
+          .where(filter)
+          .forEach(list.add);
+
       final listMap = toMaps(list);
       return listMap;
     }
@@ -142,9 +142,9 @@ mixin FSocketMix {
       final item = switch (d) {
         ({'type': String t}) => switch (FractalCtrl.map[t]) {
             (EventsCtrl ctrl) => prepare(d as MP),
-            _ => throw Exception('wrong type $d')
+            _ => null, //throw Exception('wrong type $d')
           },
-        _ => throw Exception('wrong item $d'),
+        _ => null, //throw Exception('wrong item $d'),
       };
       if (item != null) fractals.add(item);
     }
@@ -239,7 +239,7 @@ mixin FSocketMix {
         }
         return;
       } else if (d is String && d.startsWith('[') && d.endsWith(']')) {
-        print(d);
+        //print(d);
         final m = jsonDecode(d);
         handleList(m);
         return;
