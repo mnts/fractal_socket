@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:frac/index.dart';
 import 'package:fractal/fractal.dart';
 import 'package:fractal/types/file.dart';
+import 'package:fractal/utils/random.dart';
 import 'package:fractal_base/index.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:sqlite3/common.dart';
@@ -15,6 +16,8 @@ import 'socket.dart';
 class FClient extends FSocket {
   DBF get dbf => DBF.main;
   CommonDatabase get db => dbf.db;
+
+  static String get sid => DBF.main['socket'] ??= getRandomString(8);
 
   FClient({required super.name}) {
     //connect();
