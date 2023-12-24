@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:frac/frac.dart';
-import 'package:fractal/lib.dart';
 import 'package:signed_fractal/signed_fractal.dart';
 import 'session.dart';
 
@@ -66,6 +64,7 @@ class FSocket with FSocketMix {
 }
 
 mixin FSocketMix {
+  /*
   SessionF? _session;
 
   set session(SessionF? session) {
@@ -76,11 +75,13 @@ mixin FSocketMix {
 
     _session = session;
   }
+  */
 
-  SessionF? get session => _session;
+  //SessionF? get session => _session;
   final elements = StreamController.broadcast();
   //Stream<dynamic> get stream => elements.stream;
   sink(m) {
+    print('sink0');
     if (m == null || (m is List && m.isEmpty)) return;
 
     elements.sink.add(m);

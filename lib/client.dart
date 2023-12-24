@@ -26,7 +26,7 @@ class FClient extends FSocket {
   StreamSubscription? _channelSub;
   StreamSubscription? _streamSub;
 
-  connect() async {
+  Future connect() async {
     final uri = Uri.parse(join(
       FileF.wsUrl,
       'socket',
