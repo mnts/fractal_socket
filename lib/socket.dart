@@ -4,8 +4,9 @@ import 'dart:typed_data';
 import 'package:signed_fractal/signed_fractal.dart';
 import 'session.dart';
 
-class FSocket with FSocketMix {
-  final String name;
+/*
+mixin FSocket on FSocketMix {
+  //late final String name;
   /*
   Function(
     Map<String, dynamic>, [
@@ -56,12 +57,16 @@ class FSocket with FSocketMix {
     return;
   }
 
+  /*
   FSocket({
     required this.name,
   }) {
     FSocketMix.sockets[name] = this;
   }
+  */
 }
+
+*/
 
 mixin FSocketMix {
   /*
@@ -80,11 +85,39 @@ mixin FSocketMix {
   //SessionF? get session => _session;
   final elements = StreamController.broadcast();
   //Stream<dynamic> get stream => elements.stream;
-  sink(m) {
-    print('sink0');
-    if (m == null || (m is List && m.isEmpty)) return;
 
-    elements.sink.add(m);
+  distribute(EventFractal f) {
+    if (f.syncAt == 0 && active.isTrue && f.createdAt != 2) {
+      sink(f);
+      f.setSynched();
+    }
+  }
+
+  sink(d) {
+    print(d);
+    switch (d) {
+      case EventFractal evf:
+        if (evf.createdAt != 3) {
+          elements.sink.add(
+            [evf.toMap()],
+          );
+        }
+      case Iterable list:
+        final forSink = [];
+        for (final f in list) {
+          switch (f) {
+            case EventFractal evf:
+              if (evf.createdAt != 3) {
+                forSink.add(evf.hash);
+              }
+            case MP m:
+              forSink.add(m);
+          }
+        }
+        if (forSink.isNotEmpty) elements.sink.add(forSink);
+      case MP m:
+        elements.sink.add(m);
+    }
   }
 
   final ht = 34355;
@@ -100,6 +133,7 @@ mixin FSocketMix {
     return true;
   }
 
+  /*>
   //final syncTime = StoredFrac('$name', 0);
   List<MP> find(MP m) {
     /*if (m case {'type': String t}) {
@@ -108,6 +142,17 @@ mixin FSocketMix {
         _ => throw Exception('wrong type')
       };
     } else */
+
+    final rows = EventFractal.controller.select(
+      where: m,
+      includeSubTypes: true,
+    );
+
+    connect().then((t) {
+      
+    });
+    return rows;
+    /*
     if (m case {'since': int time}) {
       final list = <EventFractal>[];
       EventFractal.map.list
@@ -119,50 +164,145 @@ mixin FSocketMix {
       return listMap;
     }
     return [];
+    */
+  }
+
+  Iterable<String> search(MP m) {
+    final ctrl = FractalCtrl.map[m['type']];
+    if (ctrl == null) return [];
+    return ctrl.select(
+      fields: ['hash'],
+      where: m['where'],
+    ).map((f) => f['hash']);
   }
 
   static List<MP> toMaps(List<Fractal> fractals) =>
       fractals.map((f) => f.toMap()).toList();
+  */
 
-  FutureOr<Object?> handle(MP m) async => switch (m) {
-        ({'cmd': String cmd}) => switch (cmd) {
-            'find' => find(m),
-            _ => throw Exception('wrong cmd')
-          },
-        _ => throw Exception('wrong item'),
-      };
+  void handle(MP m) async {
+    List h = switch (m['hash']) {
+      List h => h,
+      String h => [h],
+      _ => [],
+    };
+    if (h.isEmpty) return;
+
+    switch (m) {
+      case ({'cmd': String cmd}):
+        switch (cmd) {
+          //'find' => find(m['filter']),
+          //'search' => search(m),
+          case 'pick':
+            for (final hash in h) {
+              CatalogFractal.pick(hash).then(sink);
+            }
+          case 'subscribe':
+            for (final hash in h) {
+              _subscribe(hash);
+            }
+          case _:
+            throw Exception('wrong cmd');
+        }
+      case _:
+        Exception('wrong item');
+    }
+  }
+
+  void _subscribe(String hash) async {
+    final f = await CatalogFractal.pick(hash, pick);
+    switch (f) {
+      case CatalogFractal catalog:
+        final list = catalog.listen(sink).whereType<EventFractal>();
+        if (list.isNotEmpty) sink(list);
+    }
+  }
+
+  final picked = <String>[];
+  final picking = <String>[];
+
+  static final pickTimer = TimedF();
+  void pick(String h) async {
+    if (h.isEmpty) return;
+
+    picking.add(h);
+    pickTimer.hold(() async {
+      sink({
+        'cmd': 'pick',
+        'hash': [...picking],
+      });
+      picking.clear();
+    }, 90);
+  }
+
+  final subscribing = <String>[];
+  void subscribe(String h) {
+    if (subscribing.contains(h)) return;
+
+    sink({
+      'cmd': 'subscribe',
+      'hash': h,
+    });
+    subscribing.add(h);
+  }
 
   void handleList(List list) async {
+    print(list);
     for (final d in list) {
-      final String hash = d['hash'] ?? '';
-      if (hash.isEmpty || received.contains(hash)) continue;
+      switch (d) {
+        case Map m:
+          final String hash = m['hash'] ?? '';
+          if (hash.isEmpty || received.contains(hash)) continue;
 
-      received.add(hash);
-      prepare(d as MP);
+          received.add(hash);
+          prepare(m as MP);
+        case String s:
+          CatalogFractal.pick(s, pick);
+        /*
+          if (!EventFractal.map.containsKey(s)) {
+            missing.add(s);
+          }
+          */
+      }
     }
+    /*
+    if (missing.isNotEmpty) {
+      final found = <EventFractal>[];
+      for (var hash in missing) {
+        final f = EventFractal.map[hash];
+        if (f != null) {
+          found.add(f);
+        }
+      }
+      sink(found.map(
+        (f) => f.toMap(),
+      ));
+    }
+    */
   }
 
   Future<EventFractal?> prepare(MP item) async {
     final hash = item['hash'];
     item.remove('id');
-    item.remove('hash');
+    //item.remove('hash');
     item.remove('sync_at');
     final map = EventFractal.map;
     if (hash == null || map.containsKey(hash)) return null;
     return Rewritable.ext(item, () async {
       final ctrl = FractalCtrl.map[item['type']];
       if (ctrl is! EventsCtrl) return null;
-      ctrl as EventsCtrl;
-      return (await ctrl.make(item));
+      final fractal = await ctrl.make(item);
+      //if(fractal is FilterFractal)
+      return fractal;
     });
     // fractal.hash = '';
   }
 
   final received = <String>[];
 
-  static final Map<String, FSocket> sockets = {};
-  List<FSocket> get otherSockets =>
-      sockets.values.where((s) => s != this).toList();
+  /*
+
+  */
 
   static initiate() {
     /*
@@ -204,6 +344,7 @@ mixin FSocketMix {
 
     if (last.isNotEmpty) _spread(last);
   }
+import 'package:path/path.dart';
 
   // filter out thosae items that was already shared by socket
   static _spread(msg) {
@@ -228,10 +369,7 @@ mixin FSocketMix {
     try {
       if (d is String && d.startsWith('{') && d.endsWith('}')) {
         final m = jsonDecode(d);
-        final r = await handle(m);
-        if (r != null) {
-          sink(r);
-        }
+        handle(m);
         return;
       } else if (d is String && d.startsWith('[') && d.endsWith(']')) {
         //print(d);
@@ -239,6 +377,7 @@ mixin FSocketMix {
         handleList(m);
         return;
       }
+
       final b = d as Uint8List;
 
       final v = ByteData.view(b.buffer, 0, 2);
@@ -251,23 +390,22 @@ mixin FSocketMix {
 
   final active = Frac<bool>(false);
   disconnected() {
+    print('disconnected');
     active.value = false;
     //sockets.remove(socket.name);
     //Communication.catalog.unListen(distributor);
   }
 
   connected() {
+    print('connected');
     active.value = true;
     //sockets.remove(socket.name);
     //Communication.catalog.unListen(distributor);
   }
 
-  static final _onConnectedCBs = <Function(FSocket socket)>[];
-  static onConnected(Function(FSocket socket) cb) {
-    _onConnectedCBs.add(cb);
-  }
-
   /*
+
+
   ready(FServer server) {
     sink(server);
     for (final cb in _onConnectedCBs) {

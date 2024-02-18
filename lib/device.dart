@@ -1,9 +1,7 @@
+/*
 import 'dart:convert';
-
 import 'package:parchment/parchment.dart';
 import 'package:signed_fractal/signed_fractal.dart';
-import 'package:signed_fractal/models/rewriter.dart';
-import 'package:fractal/types/index.dart';
 
 enum Audience {
   all,
@@ -92,3 +90,5 @@ class DeviceFractal extends NodeFractal implements Rewritable {
         'audience': audience.index,
       };
 }
+
+*/
