@@ -290,7 +290,9 @@ mixin FSocketMix {
     if (hash == null || map.containsKey(hash)) return null;
     return Rewritable.ext(item, () async {
       final ctrl = FractalCtrl.map[item['type']];
-      if (ctrl is! EventsCtrl) return null;
+      if (ctrl is! EventsCtrl) {
+        throw Exception('Controller $ctrl is not supported');
+      }
       final fractal = await ctrl.make(item);
       //if(fractal is FilterFractal)
       return fractal;

@@ -114,16 +114,17 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
   StreamSubscription? _channelSub;
   StreamSubscription? _streamSub;
 
-  establish() async {
+  Future establish() async {
     active.listen((a) {
       if (a) toSynch();
     });
 
-    await connect();
     Timer.periodic(
       Duration(seconds: 3),
       (t) => checkIfClosed(t),
     );
+    //await connect();
+    return;
   }
 
   Future<bool> connect() async {
@@ -136,30 +137,31 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
 
     print('Connect: $uri');
 
-    try {
-      _channelSub?.cancel();
-      _streamSub?.cancel();
+    //try {
+    _channelSub?.cancel();
+    _streamSub?.cancel();
 
-      _channel = WebSocketChannel.connect(uri);
-      _channelSub = _channel?.stream.listen(receive);
-      await _channel!.ready;
-      print('Connected with: ${from.name}');
-      connected();
+    _channel = WebSocketChannel.connect(uri);
+    _channelSub = _channel?.stream.listen(receive);
+    await _channel!.ready;
+    print('Connected with: ${from.name}');
+    connected();
 
-      _streamSub = elements.stream.listen((m) {
-        final request = jsonEncode(m);
-        _channel?.sink.add(request);
-      });
+    _streamSub = elements.stream.listen((m) {
+      final request = jsonEncode(m);
+      _channel?.sink.add(request);
+    });
 
-      return true;
+    return true;
 
-      //if (_channel != null) map[from.name] = _channel!;
+    //if (_channel != null) map[from.name] = _channel!;
+    /*
     } catch (_) {
       _channel = null;
       _channelSub = null;
       print('cant connect to $uri');
     }
-    return false;
+    */
   }
 
   @override
@@ -215,10 +217,10 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
     DBF.main['lastSynch ${from.name}'] = unixSeconds;
   }
 
-  checkIfClosed(Timer timer) {
+  void checkIfClosed(Timer timer) {
     if (_channel == null || _channel!.closeCode != null) {
       disconnected();
-      return connect();
+      connect();
     }
 
     //
