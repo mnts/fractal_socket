@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:fractal_base/access/abstract.dart';
 import 'package:fractal_base/fractals/device.dart';
 import 'package:signed_fractal/models/index.dart';
 import 'package:signed_fractal/signed_fractal.dart';
@@ -18,9 +19,9 @@ class ClientCtrl<T extends ClientFractal> extends ConnectionCtrl<T> {
   });
 }
 
-class ClientFractal extends ConnectionFractal with FSocketMix {
+class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
   DBF get dbf => DBF.main;
-  CommonDatabase get db => dbf.db;
+  FDBA get db => dbf.db;
 
   //static String get sid => DBF.main['socket'] ??= getRandomString(8);
 
@@ -49,8 +50,6 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
 
   @override
   disconnected() {
-    EventFractal.map.unListen(distribute);
-
     _channel?.sink.close();
     _channel = null;
 
@@ -59,17 +58,25 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
 
   @override
   connected() {
-    EventFractal.map.listen(distribute);
     super.connected();
+  }
+
+  onSynch() {
+    EventFractal.map.listen(distribute);
+  }
+
+  offSynch() {
+    EventFractal.map.unListen(distribute);
   }
 
   @override
   prepare(MP item) async {
+    if (from case DeviceFractal device) {
+      item['shared_with'] = [device];
+    }
+
     final f = await super.prepare(item);
     if (f == null) return null;
-    if (from case DeviceFractal device) {
-      f.sharedWith.add(device);
-    }
     f.syncAt = unixSeconds;
 
     f.synch();
@@ -77,6 +84,15 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
     return f;
   }
 
+  @override
+  pass(f) {
+    if (!super.pass(f)) return false;
+    final isShared = f.sharedWith.contains(from);
+    if (!isShared) {
+      f.sharedWith.add(from as DeviceFractal);
+    }
+    return !isShared;
+  }
   /*
   void spread(EventFractal event) {
     //return;
@@ -114,7 +130,7 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
   StreamSubscription? _channelSub;
   StreamSubscription? _streamSub;
 
-  Future establish() async {
+  Future<bool> establish() async {
     active.listen((a) {
       if (a) toSynch();
     });
@@ -123,8 +139,8 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
       Duration(seconds: 3),
       (t) => checkIfClosed(t),
     );
-    //await connect();
-    return;
+    await connect();
+    return true;
   }
 
   Future<bool> connect() async {
@@ -145,6 +161,7 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
     _channelSub = _channel?.stream.listen(receive);
     await _channel!.ready;
     print('Connected with: ${from.name}');
+    onSynch();
     connected();
 
     _streamSub = elements.stream.listen((m) {
@@ -173,15 +190,13 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
 
   WebSocketChannel? _channel;
 
-  int get lastSynch => dbf['lastSynch ${from.name}'] ?? 0;
+  //int get lastSynch => dbf['lastSynch ${from.name}'] ?? 0;
 
   toSynch() {
     if (!active.isTrue) return;
     final c = CatalogFractal(
       filter: {
-        'event': {
-          'sync_at': 0,
-        },
+        'sync_at': 0,
       },
       source: EventFractal.controller,
     );
@@ -213,13 +228,14 @@ class ClientFractal extends ConnectionFractal with FSocketMix {
         _ => super.handle(m),
       };
 
-  synched() {
-    DBF.main['lastSynch ${from.name}'] = unixSeconds;
+  synched() async {
+    await DBF.main.setVar('lastSynch ${from.name}', unixSeconds);
   }
 
   void checkIfClosed(Timer timer) {
     if (_channel == null || _channel!.closeCode != null) {
       disconnected();
+      offSynch();
       connect();
     }
 

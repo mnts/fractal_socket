@@ -68,7 +68,7 @@ mixin FSocket on FSocketMix {
 
 */
 
-mixin FSocketMix {
+mixin FSocketMix on SinkF {
   /*
   SessionF? _session;
 
@@ -86,6 +86,10 @@ mixin FSocketMix {
   final elements = StreamController.broadcast();
   //Stream<dynamic> get stream => elements.stream;
 
+  bool pass(EventFractal f) {
+    return f.createdAt != 3;
+  }
+
   distribute(EventFractal f) {
     if (f.syncAt == 0 && active.isTrue && f.createdAt != 2) {
       sink(f);
@@ -93,11 +97,12 @@ mixin FSocketMix {
     }
   }
 
+  @override
   sink(d) {
-    print(d);
+    print('sink: $d');
     switch (d) {
       case EventFractal evf:
-        if (evf.createdAt != 3) {
+        if (pass(evf)) {
           elements.sink.add(
             [evf.toMap()],
           );
@@ -128,10 +133,6 @@ mixin FSocketMix {
 
   static List<EventsCtrl> get ctrls =>
       FractalCtrl.map.values.whereType<EventsCtrl>().toList();
-
-  bool filter(EventFractal f) {
-    return true;
-  }
 
   /*>
   //final syncTime = StoredFrac('$name', 0);
@@ -180,48 +181,40 @@ mixin FSocketMix {
       fractals.map((f) => f.toMap()).toList();
   */
 
-  void handle(MP m) async {
-    List h = switch (m['hash']) {
-      List h => h,
-      String h => [h],
-      _ => [],
-    };
-    if (h.isEmpty) return;
-
-    switch (m) {
-      case ({'cmd': String cmd}):
-        switch (cmd) {
-          //'find' => find(m['filter']),
-          //'search' => search(m),
-          case 'pick':
-            for (final hash in h) {
-              CatalogFractal.pick(hash).then(sink);
-            }
-          case 'subscribe':
-            for (final hash in h) {
-              _subscribe(hash);
-            }
-          case _:
-            throw Exception('wrong cmd');
-        }
-      case _:
-        Exception('wrong item');
-    }
-  }
+  //List<CatalogFractal> subscribed = [];
 
   void _subscribe(String hash) async {
     final f = await CatalogFractal.pick(hash, pick);
     switch (f) {
       case CatalogFractal catalog:
-        final list = catalog.listen(sink).whereType<EventFractal>();
+        catalog.look(this);
+        final list = catalog.list.whereType<EventFractal>();
         if (list.isNotEmpty) sink(list);
     }
+  }
+
+  void _unsubscribe(String hash) async {
+    final f = await CatalogFractal.pick(hash, pick);
+    switch (f) {
+      case CatalogFractal catalog:
+        //subscribed.remove(catalog);
+        catalog.unLook(this);
+    }
+  }
+
+  unSubscribeAll() {
+    CatalogFractal.controller.list.where((c) {
+      c.unLook(this);
+      //if (c.noInterest) EventFractal.map.remove(c.hash);
+      //c.dispose();
+      return c.noInterest;
+    });
   }
 
   final picked = <String>[];
   final picking = <String>[];
 
-  static final pickTimer = TimedF();
+  final pickTimer = TimedF();
   void pick(String h) async {
     if (h.isEmpty) return;
 
@@ -246,15 +239,50 @@ mixin FSocketMix {
     subscribing.add(h);
   }
 
+  void handle(MP m) async {
+    print('handle: $m');
+    List h = switch (m['hash']) {
+      List h => h,
+      String h => [h],
+      _ => [],
+    };
+    if (h.isEmpty) return;
+
+    switch (m) {
+      case ({'cmd': String cmd}):
+        switch (cmd) {
+          //'find' => find(m['filter']),
+          //'search' => search(m),
+          case 'pick':
+            for (final hash in h) {
+              CatalogFractal.pick(hash).then(sink);
+            }
+          case 'subscribe':
+            for (final hash in h) {
+              _subscribe(hash);
+            }
+          case 'unsubscribe':
+            for (final hash in h) {
+              _unsubscribe(hash);
+            }
+          case _:
+            throw Exception('wrong cmd');
+        }
+      case _:
+        Exception('wrong item');
+    }
+  }
+
   void handleList(List list) async {
-    print(list);
     for (final d in list) {
       switch (d) {
         case Map m:
+          /*
           final String hash = m['hash'] ?? '';
           if (hash.isEmpty || received.contains(hash)) continue;
 
           received.add(hash);
+          */
           prepare(m as MP);
         case String s:
           CatalogFractal.pick(s, pick);
@@ -282,10 +310,18 @@ mixin FSocketMix {
   }
 
   Future<EventFractal?> prepare(MP item) async {
-    final hash = item['hash'];
     item.remove('id');
     //item.remove('hash');
-    item.remove('sync_at');
+    item['sync_at'] = unixSeconds;
+
+    final ctrl = FractalCtrl.map[item['type']];
+    if (ctrl is! EventsCtrl) {
+      throw Exception('Controller $ctrl is not supported');
+    }
+
+    return ctrl.put(item);
+    /*
+
     final map = EventFractal.map;
     if (hash == null || map.containsKey(hash)) return null;
     return Rewritable.ext(item, () async {
@@ -298,9 +334,10 @@ mixin FSocketMix {
       return fractal;
     });
     // fractal.hash = '';
+    */
   }
 
-  final received = <String>[];
+  //final received = <String>[];
 
   /*
 
