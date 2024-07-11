@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:fractal_base/access/abstract.dart';
 import 'package:fractal_base/fractals/device.dart';
 import 'package:signed_fractal/models/index.dart';
+import 'package:signed_fractal/models/network.dart';
 import 'package:signed_fractal/signed_fractal.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:sqlite3/common.dart';
@@ -85,7 +86,7 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
   }
 
   @override
-  pass(f) {
+  bool pass(f) {
     if (!super.pass(f)) return false;
     final isShared = f.sharedWith.contains(from);
     if (!isShared) {
@@ -144,11 +145,12 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
   }
 
   Future<bool> connect() async {
-    final net = to as NetworkFractal;
+    final net = (await to?.future) as NetworkFractal;
+    final f = from;
     final uri = Uri.parse(join(
       FileF.wsUrl(net.name),
       'socket',
-      from.name,
+      f.name,
     ));
 
     print('Connect: $uri');
@@ -159,14 +161,15 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
 
     _channel = WebSocketChannel.connect(uri);
     _channelSub = _channel?.stream.listen(receive);
-    await _channel!.ready;
-    print('Connected with: ${from.name}');
-    onSynch();
-    connected();
+    _channel!.ready.then((d) async {
+      print('Connected with: ${f.name}');
+      onSynch();
+      connected();
 
-    _streamSub = elements.stream.listen((m) {
-      final request = jsonEncode(m);
-      _channel?.sink.add(request);
+      _streamSub = elements.stream.listen((m) {
+        final request = jsonEncode(m);
+        _channel?.sink.add(request);
+      });
     });
 
     return true;
@@ -228,8 +231,9 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
         _ => super.handle(m),
       };
 
-  synched() async {
+  Future<bool> synched() async {
     await DBF.main.setVar('lastSynch ${from.name}', unixSeconds);
+    return true;
   }
 
   void checkIfClosed(Timer timer) {

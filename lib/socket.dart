@@ -91,6 +91,7 @@ mixin FSocketMix on SinkF {
   }
 
   distribute(EventFractal f) {
+    print(f);
     if (f.syncAt == 0 && active.isTrue && f.createdAt != 2) {
       sink(f);
       f.setSynched();
@@ -103,9 +104,8 @@ mixin FSocketMix on SinkF {
     switch (d) {
       case EventFractal evf:
         if (pass(evf)) {
-          elements.sink.add(
-            [evf.toMap()],
-          );
+          final m = evf.toMap();
+          elements.sink.add([m]);
         }
       case Iterable list:
         final forSink = [];
@@ -255,7 +255,7 @@ mixin FSocketMix on SinkF {
           //'search' => search(m),
           case 'pick':
             for (final hash in h) {
-              CatalogFractal.pick(hash).then(sink);
+              if (hash is String) CatalogFractal.pick(hash).then(sink);
             }
           case 'subscribe':
             for (final hash in h) {
