@@ -99,7 +99,7 @@ mixin FSocketMix on SinkF {
   }
 
   @override
-  sink(d) {
+  sink(d) async {
     print('sink: $d');
     switch (d) {
       case EventFractal evf:
@@ -123,6 +123,7 @@ mixin FSocketMix on SinkF {
       case MP m:
         elements.sink.add(m);
     }
+    return true;
   }
 
   final ht = 34355;

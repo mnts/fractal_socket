@@ -140,7 +140,11 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
       Duration(seconds: 3),
       (t) => checkIfClosed(t),
     );
-    await connect();
+    try {
+      await connect();
+    } catch (_) {
+      return false;
+    }
     return true;
   }
 
@@ -161,15 +165,14 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
 
     _channel = WebSocketChannel.connect(uri);
     _channelSub = _channel?.stream.listen(receive);
-    _channel!.ready.then((d) async {
-      print('Connected with: ${f.name}');
-      onSynch();
-      connected();
+    await _channel!.ready;
+    print('Connected with: ${f.name}');
+    onSynch();
+    connected();
 
-      _streamSub = elements.stream.listen((m) {
-        final request = jsonEncode(m);
-        _channel?.sink.add(request);
-      });
+    _streamSub = elements.stream.listen((m) {
+      final request = jsonEncode(m);
+      _channel?.sink.add(request);
     });
 
     return true;
@@ -185,10 +188,11 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
   }
 
   @override
-  sink(d) {
-    if (!active.isTrue) return;
+  sink(d) async {
+    if (!active.isTrue) return false;
     super.sink(d);
-    synched();
+    await synched();
+    return true;
   }
 
   WebSocketChannel? _channel;
