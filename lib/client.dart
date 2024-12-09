@@ -1,15 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:fractal_base/access/abstract.dart';
 import 'package:fractal_base/fractals/device.dart';
-import 'package:signed_fractal/models/index.dart';
-import 'package:signed_fractal/models/network.dart';
 import 'package:signed_fractal/signed_fractal.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:sqlite3/common.dart';
 import 'package:path/path.dart';
-
-import 'socket.dart';
+import 'api.dart';
+import 'index.dart';
 
 class ClientCtrl<T extends ClientFractal> extends ConnectionCtrl<T> {
   ClientCtrl({
@@ -20,7 +15,7 @@ class ClientCtrl<T extends ClientFractal> extends ConnectionCtrl<T> {
   });
 }
 
-class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
+class ClientFractal extends ConnectionFractal with SocketF, FSocketAPI {
   DBF get dbf => DBF.main;
   FDBA get db => dbf.db;
 
@@ -42,33 +37,12 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
 
 
   @override
-  filter(f) {
+  filter(f) {strea
     final contains = f.sharedWith.contains(from.name);
     if (!contains) f.sharedWith.add(from.name);
     return !contains;
   }
   */
-
-  @override
-  disconnected() {
-    _channel?.sink.close();
-    _channel = null;
-
-    super.disconnected();
-  }
-
-  @override
-  connected() {
-    super.connected();
-  }
-
-  onSynch() {
-    EventFractal.map.listen(distribute);
-  }
-
-  offSynch() {
-    EventFractal.map.unListen(distribute);
-  }
 
   @override
   prepare(MP item) async {
@@ -126,129 +100,43 @@ class ClientFractal extends ConnectionFractal with SinkF, FSocketMix {
     _onConnectedCBs.add(cb);
   }
 
-  static ClientFractal? main;
+  //static ClientFractal? main;
 
-  StreamSubscription? _channelSub;
-  StreamSubscription? _streamSub;
-
-  Future<bool> establish() async {
-    active.listen((a) {
-      if (a) toSynch();
-    });
-
-    Timer.periodic(
-      Duration(seconds: 3),
-      (t) => checkIfClosed(t),
-    );
-    try {
-      await connect();
-    } catch (_) {
-      return false;
-    }
-    return true;
-  }
-
-  Future<bool> connect() async {
-    final net = (await to?.future) as NetworkFractal;
+  Timer? pinger;
+  //StreamSubscription? _channelSub;
+  late final Uri uri;
+  void establish() {
+    final net = to as NetworkFractal;
     final f = from;
-    final uri = Uri.parse(join(
-      FileF.wsUrl(net.name),
+    String host = net.name;
+    if (!host.contains('localhost') && host.split('.').length < 2) {
+      host = 'api.$host';
+    }
+
+    uri = Uri.parse(join(
+      FileF.wsUrl(host),
       'socket',
       f.name,
     ));
+    
+    connect(uri);
 
-    print('Connect: $uri');
-
-    //try {
-    _channelSub?.cancel();
-    _streamSub?.cancel();
-
-    _channel = WebSocketChannel.connect(uri);
-    _channelSub = _channel?.stream.listen(receive);
-    await _channel!.ready;
-    print('Connected with: ${f.name}');
-    onSynch();
-    connected();
-
-    _streamSub = elements.stream.listen((m) {
-      final request = jsonEncode(m);
-      _channel?.sink.add(request);
-    });
-
-    return true;
-
-    //if (_channel != null) map[from.name] = _channel!;
-    /*
-    } catch (_) {
-      _channel = null;
-      _channelSub = null;
-      print('cant connect to $uri');
-    }
-    */
+    Timer.periodic(
+      Duration(seconds: 30),
+      reconnect,
+    );
   }
 
-  @override
-  sink(d) async {
-    if (!active.isTrue) return false;
-    super.sink(d);
-    await synched();
-    return true;
+  reconnect(t) {
+    if (!active.isTrue) connect(uri);
   }
-
-  WebSocketChannel? _channel;
 
   //int get lastSynch => dbf['lastSynch ${from.name}'] ?? 0;
 
-  toSynch() {
-    if (!active.isTrue) return;
-    final c = CatalogFractal(
-      filter: {
-        'sync_at': 0,
-      },
-      source: EventFractal.controller,
-    );
-    c.createdAt = 1;
-    c.doHash();
-
-    sink([
-      ...c.list.map(
-        (f) => f.toMap(),
-      )
-    ]);
-
-    for (var f in c.list) {
-      f.setSynched();
-    }
-  }
-
-  @override
-  handleList(list) {
-    final listR = super.handleList(list);
-    synched();
-    return listR;
-  }
-
-  @override
-  handle(m) async => switch (m) {
-        //{'cmd': 'sync'} => synch(),
-        {'user': [String name, int age]} => 'ok',
-        _ => super.handle(m),
-      };
-
+  /*
   Future<bool> synched() async {
-    await DBF.main.setVar('lastSynch ${from.name}', unixSeconds);
+    //await DBF.main.setVar('lastSynch ${from.name}', unixSeconds);
     return true;
   }
-
-  void checkIfClosed(Timer timer) {
-    if (_channel == null || _channel!.closeCode != null) {
-      disconnected();
-      offSynch();
-      connect();
-    }
-
-    //
-
-    //map.remove(from.name);
-  }
+  */
 }
