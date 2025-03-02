@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:fractal_base/access/abstract.dart';
-import 'package:fractal_base/fractals/device.dart';
 import 'package:signed_fractal/signed_fractal.dart';
 import 'package:path/path.dart';
 import 'api.dart';
@@ -19,7 +18,18 @@ class ClientFractal extends ConnectionFractal with SocketF, FSocketAPI {
   DBF get dbf => DBF.main;
   FDBA get db => dbf.db;
 
+  static final controller = ClientCtrl(
+    extend: ConnectionFractal.controller,
+    make: (d) => switch (d) {
+      MP() => ClientFractal.fromMap(d),
+      Object() || null => throw ('wrong event type')
+    },
+    attributes: [],
+  );
   //static String get sid => DBF.main['socket'] ??= getRandomString(8);
+
+  @override
+  ConnectionCtrl get ctrl => controller;
 
   ClientFractal({
     required NetworkFractal super.to,
@@ -27,6 +37,8 @@ class ClientFractal extends ConnectionFractal with SocketF, FSocketAPI {
   }) {
     //connect();
   }
+
+  ClientFractal.fromMap(super.d) : super.fromMap();
 
   //late final String name;
   /*
@@ -37,7 +49,7 @@ class ClientFractal extends ConnectionFractal with SocketF, FSocketAPI {
 
 
   @override
-  filter(f) {strea
+  filter(f) {strea>
     final contains = f.sharedWith.contains(from.name);
     if (!contains) f.sharedWith.add(from.name);
     return !contains;
@@ -50,13 +62,7 @@ class ClientFractal extends ConnectionFractal with SocketF, FSocketAPI {
       item['shared_with'] = [device];
     }
 
-    final f = await super.prepare(item);
-    if (f == null) return null;
-    f.syncAt = unixSeconds;
-
-    f.synch();
-
-    return f;
+    super.prepare(item);
   }
 
   @override
@@ -109,7 +115,7 @@ class ClientFractal extends ConnectionFractal with SocketF, FSocketAPI {
     final net = to as NetworkFractal;
     final f = from;
     String host = net.name;
-    if (!host.contains('localhost') && host.split('.').length < 2) {
+    if (!host.contains('localhost') && host.split('.').length < 3) {
       host = 'api.$host';
     }
 
@@ -118,7 +124,7 @@ class ClientFractal extends ConnectionFractal with SocketF, FSocketAPI {
       'socket',
       f.name,
     ));
-    
+
     connect(uri);
 
     Timer.periodic(

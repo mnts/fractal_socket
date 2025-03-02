@@ -1,11 +1,18 @@
 import 'dart:convert';
-
 import 'package:frac/index.dart';
+import 'package:fractal_socket/client.dart';
+import 'package:signed_fractal/models/interaction.dart';
+import 'package:signed_fractal/signed_fractal.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 mixin SocketF {
+  static Future init() async {
+    await ClientFractal.controller.init();
+  }
+
   final delayed = <String>[];
   put(m) {
+    print('out: $m');
     try {
       final msg = jsonEncode(m);
       out(msg);

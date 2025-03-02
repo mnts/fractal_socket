@@ -17,6 +17,11 @@ dependencies:
   signed_fractal:
     path: ../signed_fractal
   web_socket_channel: ^3.0.1
+  http:
+  aws_signature_v4: ^0.6.3
+  aws_common:
+  aws_s3_api: ^2.0.0
+  dart_webrtc: ^1.5.1
 
 dev_dependencies:
   lints: ^4.0.0
